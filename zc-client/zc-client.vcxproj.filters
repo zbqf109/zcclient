@@ -42,6 +42,15 @@
     <ClInclude Include="MyUrl.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Sms.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MyClientRun.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MyClientThreadParam.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="zc-client.cpp">
@@ -60,6 +69,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="MyUrl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Sms.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MyClientRun.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MyClientThreadParam.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

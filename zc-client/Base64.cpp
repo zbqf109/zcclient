@@ -86,7 +86,7 @@ CString CBase64::decode(const CString &inpt, int * len)
 {
 	int n, i, j, pad;
 	unsigned char *p;
-	unsigned char *dst;
+	wchar_t *dst;
 	unsigned char * src;
 	*len = 0;
 	pad = 0;
@@ -107,7 +107,7 @@ CString CBase64::decode(const CString &inpt, int * len)
 		src[i] = p - (unsigned char *)base64;
 	}
 
-	dst = (unsigned char *)malloc(n * 3 / 4 + 1);
+	dst = (wchar_t *)malloc((n * 3 / 4 + 1) * sizeof(wchar_t));
 	memset(dst, 0, n * 3 / 4 + 1);
 	for (i = 0, j = 0;i < n;i += 4, j += 3) {
 		dst[j] = (src[i] << 2) + ((src[i + 1] & 0x30) >> 4);
@@ -116,5 +116,7 @@ CString CBase64::decode(const CString &inpt, int * len)
 		*len += 3;
 	}
 	*len -= pad;
-	return CString(dst);
+	delete src;
+
+	return CString(dst, *len+1);
 }

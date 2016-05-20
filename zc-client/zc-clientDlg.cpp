@@ -23,7 +23,7 @@
 
 
 CzcclientDlg::CzcclientDlg(CWnd* pParent /*=NULL*/)
-	: CDialogEx(IDD_ZCCLIENT_DIALOG, pParent)
+	: CDialogEx(IDD_ZCCLIENT_DIALOG, pParent), m_clientThread(NULL)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
@@ -38,6 +38,9 @@ BEGIN_MESSAGE_MAP(CzcclientDlg, CDialogEx)
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_BUTTON_START, &CzcclientDlg::OnBnClickedButtonStart)
 	ON_BN_CLICKED(IDC_BUTTON1, &CzcclientDlg::OnBnClickedButton1)
+	ON_MESSAGE(WM_USER_SERVERNUMBER, &CzcclientDlg::OnServerNumber)
+	ON_MESSAGE(WM_USER_ADDLOG, &CzcclientDlg::OnAddLog)
+	ON_MESSAGE(WM_USER_THREDQUIT, &CzcclientDlg::OnTaskEnd)
 END_MESSAGE_MAP()
 
 
@@ -148,10 +151,30 @@ HCURSOR CzcclientDlg::OnQueryDragIcon()
 
 void CzcclientDlg::OnBnClickedButtonStart()
 {
+	CWnd *pStartButton = (CWnd *)GetDlgItem(IDC_BUTTON_START);
+	CEdit *pEditId = (CEdit *)GetDlgItem(IDC_EDIT1);
+
+
+
+	if (m_clientThread != NULL)
+	{
+		//AfxEndThread(0);
+		AppendLog(_T("等待任务结束"));
+		m_ctObj.m_mutex.Lock();
+		m_ctObj.m_bQuit = TRUE;
+		m_ctObj.m_mutex.Unlock();
+
+		//::WaitForSingleObject(m_clientThread->m_hThread, INFINITE);
+
+		//pStartButton->SetWindowText(_T("开始"));
+		//pEditId->SetReadOnly(FALSE);
+		m_clientThread = NULL;
+		return;
+	}
+
 	CString name;
-
-	GetDlgItemText(IDC_EDIT1, name);
-
+	//GetDlgItemText(IDC_EDIT1, name);
+	pEditId->GetWindowText(name);
 	name = name.Trim();
 
 	if (name.GetLength() == 0)
@@ -160,7 +183,6 @@ void CzcclientDlg::OnBnClickedButtonStart()
 		GetDlgItem(IDC_EDIT1)->SetFocus();
 		return;
 	}
-
 	
 	GetDlgItemText(IDC_EDIT3, m_sServer);
 
@@ -224,16 +246,33 @@ void CzcclientDlg::OnBnClickedButtonStart()
 		MessageBox(slog, _T("提示"));
 		return;
 	}
+	else if (sContent != _T("ok"))
+	{
+		CString slog;
+		slog.Format(_T("服务器返回: %s"), sContent);
+		AppendLog(slog);
+		return;
+	}
 
 	CString sResultMsg;
 	//MessageBox();
 	sResultMsg.Format(_T("初始化成功，服务器返回 %s"), sContent);
 	AppendLog(sResultMsg);
 
+	m_ctObj.m_bQuit = FALSE;
 	m_ctObj.m_sServer = m_sServer;
 	m_ctObj.m_sName = name;
+	m_ctObj.m_wndDlg = GetSafeHwnd();
+
+	pStartButton->SetWindowText(_T("结束"));
+	pEditId->SetReadOnly(TRUE);
 
 	m_clientThread = AfxBeginThread(CzcclientDlg::MyClientRunFunc, &m_ctObj);
+
+	m_stObj.m_sPath = m_cdpath;
+	m_stObj.m_nType = m_cdtype;
+	m_cdscanThread = AfxBeginThread(CzcclientDlg::MyScanFunc, &m_stObj);
+	
 
 	
 #if 0
@@ -408,6 +447,9 @@ int CzcclientDlg::GetCardDrive(int &cdtype, CString &cdpath)
 
 void CzcclientDlg::AppendLog(const CString &logText)
 {
+	CTime tm = CTime::GetCurrentTime();
+	CString strTime = tm.Format("%Y-%m-%d %H:%M:%S");
+
 	if (m_lbLog == NULL)
 	{
 		m_lbLog = (CListBox *)GetDlgItem(IDC_LIST2);
@@ -419,7 +461,10 @@ void CzcclientDlg::AppendLog(const CString &logText)
 		return;
 	}
 
-	m_lbLog->InsertString(-1, logText);
+	CString log;
+	log.Format(_T("%s %s"), strTime, logText);
+
+	m_lbLog->InsertString(-1, log);
 }
 
 int CzcclientDlg::GetExePath(DWORD proccId, CString &sPath)
@@ -584,34 +629,212 @@ void CzcclientDlg::GetSmsFromCardDrive(const CString &phone)
 
 }
 
+LRESULT CzcclientDlg::OnServerNumber(WPARAM wParam, LPARAM lParam)
+{
+	CString *pStrNumber = (CString *)lParam;
+
+	int colon = 0;
+
+	for (int i = 0; i < pStrNumber->GetLength(); i++)
+	{
+		if (pStrNumber->GetAt(i) == _T(':'))
+		{
+			colon = i;
+			break;
+		}
+	}
+
+	CString sPhone;
+	CString _id = pStrNumber->Mid(colon + 1);
+
+	ULONG low = 0, high = 0;
+	ULONGLONG number;
+
+	if (colon < 0)
+		colon = pStrNumber->GetLength();
+	
+	if (colon < 4)
+	{
+		AppendLog(_T("错误的电话号码"));
+		return 0;
+	}
+	else if (colon > 8)
+		colon = 8;
+	
+
+	// convert low and high bytes -- big endian
+	for (int i = 0; i < colon - 4; i++)
+	{
+		high = (high << 8) | pStrNumber->GetAt(i);
+	}
+
+	for (int i = 0; i < 4; i++)
+	{
+		low = (low << 8) | pStrNumber->GetAt(colon - 4 + i);
+	}
+
+	//low = ntohl(low);
+	//high = ntohl(high);
+	
+	number = (((ULONGLONG)high) << 32) | low;
+
+	sPhone.Format(_T("%d"), number);
+
+	// add recv sphone smsvc
+	MySmsItem item;
+	item.m_sPhone = sPhone;
+	item.m_tAfter = CTime();
+
+	m_stObj.m_mutex.Lock();
+	m_stObj.m_listItems.AddTail(item);
+	m_stObj.m_mutex.Unlock();
+
+	CString slog;
+	slog.Format(_T("电话号码: %lld, ID: %s"), number, _id);
+	AppendLog(slog);
+
+	delete pStrNumber;
+	return 0;
+}
+
+LRESULT CzcclientDlg::OnAddLog(WPARAM wParam, LPARAM lParam)
+{
+	CString *pStrLog = (CString *)lParam;
+
+	AppendLog(*pStrLog);
+
+	delete pStrLog;
+	return 0;
+}
+
+LRESULT CzcclientDlg::OnTaskEnd(WPARAM wParam, LPARAM lParam)
+{
+	CWnd *pStartButton = (CWnd *)GetDlgItem(IDC_BUTTON_START);
+	CEdit *pEditId = (CEdit *)GetDlgItem(IDC_EDIT1);
+
+	pStartButton->SetWindowText(_T("开始"));
+	pEditId->SetReadOnly(FALSE);
+	return 0;
+}
+
+UINT CzcclientDlg::MyScanFunc(LPVOID param)
+{
+	MyScanThreadParam *stobj = (MyScanThreadParam*)param;
+
+	CFile file;
+	CString txtFile;
+
+	txtFile.Format(_T("%s总保存记录中\\短信接收记录.txt"), stobj->m_sPath);
+	// scan
+
+	while (TRUE)
+	{
+		file.Open(txtFile, CFile::modeRead);
+		//ULONGLONG fsize = file.GetLength();
+		file.Seek(0, CFile::end);
+
+		ULONGLONG lastpos = file.GetPosition();
+		ULONGLONG curpos = lastpos;
+
+		file.Seek(-1, CFile::current);
+
+		CHAR c;
+		while (1)
+		{
+			file.Read(&c, 1);
+			if (c == '\n' && curpos != lastpos)
+				break;
+			curpos = file.Seek(-2, CFile::current);
+			if (curpos == 0) // reach to begin
+				break;
+		}
+
+		char *buffer = new char[curpos-lastpos];
+		
+
+		file.Close();
+		Sleep(3 * 1000); // sleep 3 seconds
+	}
+
+	return 0;
+}
 
 UINT CzcclientDlg::MyClientRunFunc(LPVOID param)
 {
 	CMyClientThreadParam *ctObj = (CMyClientThreadParam *)param;
 
 	CString sUrl;
-	sUrl.Format(_T("%s/1/%s/3?t=%d"), ctObj->m_sServer, ctObj->m_sName, rand());
+	sUrl.Format(_T("http://%s/1/%s/2?t=%d"), ctObj->m_sServer, ctObj->m_sName, rand());
 
 	CString sContent;
 	DWORD dwRet;
+	BOOL quit = FALSE;
 
 	// GetSmsFromCardDrive(_T("18049634161"));
 	while (TRUE)
 	{
+		// 检查是否退出
+		ctObj->m_mutex.Lock();
+		quit = ctObj->m_bQuit;
+		ctObj->m_mutex.Unlock();
+
+		if (quit)
+		{
+			::PostMessage(ctObj->m_wndDlg, WM_USER_ADDLOG, 0, (LPARAM)(new CString(_T("任务结束"))));
+			break;
+		}
+
+		::PostMessage(ctObj->m_wndDlg, WM_USER_ADDLOG, 0, (LPARAM)(new CString(_T("正在查询服务器"))));
+
 		// 1. request /1/<name>/2
 		dwRet = CMyHttpRequest::Get(sUrl, sContent);
 		if (dwRet != HTTP_STATUS_OK)
 		{
+			// TODO send message to UI to show log
+			::PostMessage(ctObj->m_wndDlg, WM_USER_ADDLOG, 0, (LPARAM)(new CString(_T("服务器连接失败"))));
+			Sleep(10 * 1000); // sleep 10 seconds
 			continue;
 		}
 
 		// parse response text
 		if (sContent == _T("ok"))
+		{
+			::PostMessage(ctObj->m_wndDlg, WM_USER_ADDLOG, 0, (LPARAM)(new CString(_T("服务器未返回号码"))));
+			Sleep(10 * 1000); // sleep 10 seconds
 			continue;
+		}
 
 		int len;
 		CString n = CBase64::decode(sContent, &len);
+		if (n.GetLength() == 0)
+		{
+			::PostMessage(ctObj->m_wndDlg, WM_USER_ADDLOG, 0, (LPARAM)(new CString(_T("服务器未返回号码"))));
+			Sleep(10 * 1000); // wait for 10 seconds
+			continue;
+		}
+
+		int start = 0, end;
+		CString aphone;
+		while (TRUE)
+		{
+			end = n.Find(_T(','), start);
+			if (end <= start)
+				break;
+			aphone = n.Mid(start, end - start);
+			// TODO send message to UI to show log
+			::PostMessage(ctObj->m_wndDlg, WM_USER_SERVERNUMBER, 0, (LPARAM)(new CString(aphone)));
+			::PostMessage(ctObj->m_wndDlg, WM_USER_ADDLOG, 0, (LPARAM)(new CString(_T("从服务器取到号码"))));
+			start = end + 1; // skip `,`
+		}
+
+		// the last part
+		aphone = n.Mid(start);
+		::PostMessage(ctObj->m_wndDlg, WM_USER_SERVERNUMBER, 0, (LPARAM)(new CString(aphone)));
+		::PostMessage(ctObj->m_wndDlg, WM_USER_ADDLOG, 0, (LPARAM)(new CString(_T("从服务器取到号码"))));
+
+		Sleep(10 * 1000); // wait for 10 seconds
 	}
 
+	::PostMessage(ctObj->m_wndDlg, WM_USER_THREDQUIT, 0, 0);
 	return 0;
 }

@@ -28,7 +28,7 @@ CMyUrl::CMyUrl(const CString &sUrl)
 	else
 	{
 		m_sDomain = sUrl.Mid(scheme_, domain_ - scheme_);
-		domain_ += 1; // skip `/`
+		//domain_ += 1; // skip `/`
 
 		int colon = m_sDomain.Find(_T(':'));
 		if (colon < 0)

@@ -27,7 +27,9 @@ private:
 	CList<CString> m_lNumbers;
 	CString m_sServer;
 	CMyClientThreadParam m_ctObj;
+	MyScanThreadParam m_stObj;
 	CWinThread *m_clientThread;
+	CWinThread *m_cdscanThread;
 	int GetCardDrive(int &cdtype, CString &cdpath);
 	int GetExePath(DWORD proccId, CString &sPath);
 	void AppendLog(const CString &logText);
@@ -36,7 +38,7 @@ private:
 	void GetSmsFromCardDrive(const CString &phone);
 
 	static UINT MyClientRunFunc(LPVOID);
-
+	static UINT MyScanFunc(LPVOID);
 
 // Implementation
 protected:
@@ -46,8 +48,12 @@ protected:
 	virtual BOOL OnInitDialog();
 	afx_msg void OnPaint();
 	afx_msg HCURSOR OnQueryDragIcon();
+	
 	DECLARE_MESSAGE_MAP()
 public:
+	afx_msg LRESULT OnServerNumber(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnAddLog(WPARAM wParam, LPARAM lParam);
+	afx_msg LRESULT OnTaskEnd(WPARAM wParam, LPARAM lParam);
 	afx_msg void OnBnClickedButtonStart();
 	afx_msg void OnBnClickedButton1();
 };

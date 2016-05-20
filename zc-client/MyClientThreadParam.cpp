@@ -10,3 +10,11 @@ CMyClientThreadParam::CMyClientThreadParam()
 CMyClientThreadParam::~CMyClientThreadParam()
 {
 }
+
+MyScanThreadParam::MyScanThreadParam()
+{
+}
+
+MyScanThreadParam::~MyScanThreadParam()
+{
+}

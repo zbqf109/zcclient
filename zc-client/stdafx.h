@@ -52,3 +52,6 @@
 #endif
 
 
+#define WM_USER_SERVERNUMBER	WM_USER + 1
+#define WM_USER_ADDLOG			WM_USER + 2
+#define WM_USER_THREDQUIT		WM_USER + 3

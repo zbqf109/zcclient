@@ -29,7 +29,7 @@ DWORD CMyHttpRequest::Get(const CString &url, CString &sContent)
 	CString sUrlpath = myurl.GetPath();
 
 	conn = session.GetHttpConnection(domain, port);
-	pHttpFile = conn->OpenRequest(CHttpConnection::HTTP_VERB_POST, sUrlpath);
+	pHttpFile = conn->OpenRequest(CHttpConnection::HTTP_VERB_GET, sUrlpath);
 
 	if (pHttpFile == NULL)
 	{
