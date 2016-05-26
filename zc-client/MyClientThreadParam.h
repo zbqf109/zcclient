@@ -24,10 +24,14 @@ public:
 	MyScanThreadParam();
 	~MyScanThreadParam();
 
+	HWND m_wndDlg;
+	CString m_sServer;
+	CString m_sName;
 	CString m_sPath;
 	int m_nType;
 	CList<MySmsItem> m_listItems;
 	CTime m_tStart;
 	CMutex m_mutex;
+	BOOL m_bQuit;
 };
 

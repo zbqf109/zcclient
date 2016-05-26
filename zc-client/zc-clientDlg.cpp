@@ -12,6 +12,8 @@
 #include "Base64.h"
 #include "MyHttpRequest.h"
 #include "Sms.h"
+#include "TecentShortMessage.h"
+#include "ZipFile.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -164,11 +166,17 @@ void CzcclientDlg::OnBnClickedButtonStart()
 		m_ctObj.m_bQuit = TRUE;
 		m_ctObj.m_mutex.Unlock();
 
+		m_stObj.m_mutex.Lock();
+		m_stObj.m_bQuit = TRUE;
+		m_stObj.m_mutex.Unlock();
+
+		//m_cdscanThread = NULL;
+
 		//::WaitForSingleObject(m_clientThread->m_hThread, INFINITE);
 
 		//pStartButton->SetWindowText(_T("开始"));
 		//pEditId->SetReadOnly(FALSE);
-		m_clientThread = NULL;
+		//m_clientThread = NULL;
 		return;
 	}
 
@@ -269,8 +277,13 @@ void CzcclientDlg::OnBnClickedButtonStart()
 
 	m_clientThread = AfxBeginThread(CzcclientDlg::MyClientRunFunc, &m_ctObj);
 
+	m_stObj.m_sServer = m_sServer;
+	m_stObj.m_sName = name;
 	m_stObj.m_sPath = m_cdpath;
 	m_stObj.m_nType = m_cdtype;
+	m_stObj.m_bQuit = FALSE;
+	m_stObj.m_tStart = CTime::GetCurrentTime();
+	m_stObj.m_wndDlg = GetSafeHwnd();
 	m_cdscanThread = AfxBeginThread(CzcclientDlg::MyScanFunc, &m_stObj);
 	
 
@@ -709,13 +722,27 @@ LRESULT CzcclientDlg::OnAddLog(WPARAM wParam, LPARAM lParam)
 
 LRESULT CzcclientDlg::OnTaskEnd(WPARAM wParam, LPARAM lParam)
 {
-	CWnd *pStartButton = (CWnd *)GetDlgItem(IDC_BUTTON_START);
-	CEdit *pEditId = (CEdit *)GetDlgItem(IDC_EDIT1);
+	if (lParam == 0)
+	{
+		m_clientThread = NULL;
+	}
+	else if (lParam == 1)
+	{
+		m_cdscanThread = NULL;
+	}
 
-	pStartButton->SetWindowText(_T("开始"));
-	pEditId->SetReadOnly(FALSE);
+	if (m_cdscanThread == NULL && m_clientThread == NULL)
+	{
+		CWnd *pStartButton = (CWnd *)GetDlgItem(IDC_BUTTON_START);
+		CEdit *pEditId = (CEdit *)GetDlgItem(IDC_EDIT1);
+
+		pStartButton->SetWindowText(_T("开始"));
+		pEditId->SetReadOnly(FALSE);
+	}
 	return 0;
 }
+
+//static const CString keyWords[] = {_T("【腾讯科技】", _T("[tencent]"))};
 
 UINT CzcclientDlg::MyScanFunc(LPVOID param)
 {
@@ -724,37 +751,131 @@ UINT CzcclientDlg::MyScanFunc(LPVOID param)
 	CFile file;
 	CString txtFile;
 
-	txtFile.Format(_T("%s总保存记录中\\短信接收记录.txt"), stobj->m_sPath);
+	CString sUrl;
+	sUrl.Format(_T("http://%s/1/%s/3?t=%d"), stobj->m_sServer, stobj->m_sName, rand());
+
+	txtFile.Format(_T("%s总保存记录\\短信接收记录.txt"), stobj->m_sPath);
 	// scan
+
+	CString sResponseContent;
+	DWORD dwRet;
+	BOOL quit;
+	int result;
+	static CTime tFileWriteTime;
 
 	while (TRUE)
 	{
-		file.Open(txtFile, CFile::modeRead);
-		//ULONGLONG fsize = file.GetLength();
-		file.Seek(0, CFile::end);
+		stobj->m_mutex.Lock();
+		quit = stobj->m_bQuit;
+		stobj->m_mutex.Unlock();
 
-		ULONGLONG lastpos = file.GetPosition();
-		ULONGLONG curpos = lastpos;
+		if (quit)
+			break;
 
-		file.Seek(-1, CFile::current);
-
-		CHAR c;
-		while (1)
+		if (!PathFileExists(txtFile) || PathIsDirectory(txtFile))
 		{
-			file.Read(&c, 1);
-			if (c == '\n' && curpos != lastpos)
-				break;
-			curpos = file.Seek(-2, CFile::current);
-			if (curpos == 0) // reach to begin
-				break;
+			CString *pString = new CString();
+			pString->Format(_T("文件 %s 不存在"), txtFile);
+			::PostMessage(stobj->m_wndDlg, WM_USER_ADDLOG, 0, (LPARAM)pString);
+			Sleep(3 * 1000); // sleep 3 seconds
+			continue;
 		}
 
-		char *buffer = new char[curpos-lastpos];
+#if 0
+		file.Open(txtFile, CFile::modeRead);
+		ULONG fsize = (ULONG)file.GetLength();
 		
+		char *buffer = new char[fsize];
+		if (buffer == NULL)
+		{
+			file.Close();
+			::PostMessage(stobj->m_wndDlg, WM_USER_ADDLOG, 0, (LPARAM)(new CString(_T("内存不足"))));
+			return -1;
+		}
 
+		file.Read(buffer, fsize);
 		file.Close();
-		Sleep(3 * 1000); // sleep 3 seconds
+
+		dwRet = CMyHttpRequest::Post(sUrl, buffer, fsize, sResponseContent);
+#else
+		WIN32_FILE_ATTRIBUTE_DATA lpinf;
+
+		if (!GetFileAttributesEx(txtFile, GetFileExInfoStandard, &lpinf))
+		{
+			Sleep(3 * 1000); // sleep 3 seconds
+			continue;
+		}
+
+		
+		CTime time = CTime(lpinf.ftLastAccessTime);
+		if (tFileWriteTime >= time)
+		{
+			Sleep(3 * 1000); // sleep 3 seconds
+			continue;
+		}
+
+		tFileWriteTime = time;
+
+		CString sZipFile(_T(".com.zip"));
+
+		result = CZipFile::Zip(txtFile, sZipFile);
+
+		if (result < 0)
+		{
+			dwRet = CMyHttpRequest::UploadFile(sUrl, txtFile, sResponseContent);
+		}
+		else
+		{
+			dwRet = CMyHttpRequest::UploadFile(sUrl, sZipFile, sResponseContent);
+		}
+
+		if (dwRet != HTTP_STATUS_OK)
+		{
+			// TODO send message to UI to show log
+			CString *pString = new CString();
+			pString->Format(_T("服务器连接失败: %d"), dwRet);
+			::PostMessage(stobj->m_wndDlg, WM_USER_ADDLOG, 0, (LPARAM)pString);
+			//Sleep(10 * 1000); // sleep 10 seconds
+			//continue;
+		}
+		else
+		{
+			CString *pString = new CString(_T("发送文件成功"));
+			//pString->Format(_T("服务器连接失败: %d"), dwRet);
+			::PostMessage(stobj->m_wndDlg, WM_USER_ADDLOG, 0, (LPARAM)pString);
+			//Sleep(10 * 1000); // sleep 10 seconds
+			//continue;
+		}
+#endif
+
+#if 0
+		// parse every line
+		for (ULONG i = 0, j = 0; i < fsize; i++)
+		{
+			if (buffer[i] == '\n')
+			{
+				// got a line
+				CString line(buffer + j, i - j);
+				CTecentShortMessage sms(line);
+				// condition
+				// 1. receive time after specified time, and
+				// 2. contain a keyword
+				//if (sms.Match())
+				//{
+				//}
+				if (sms.GetTime() > stobj->m_tStart)
+				{
+					// report this
+				}
+			}
+		}
+#endif
+
+
+		Sleep(10 * 1000); // sleep 10 seconds
 	}
+
+	::PostMessage(stobj->m_wndDlg, WM_USER_THREDQUIT, 0, 1);
 
 	return 0;
 }

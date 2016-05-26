@@ -90,7 +90,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_WINDOWS;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_WINDOWS;_DEBUG;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <SDLCheck>true</SDLCheck>
     </ClCompile>
     <Link>
@@ -198,8 +198,11 @@
     <ClInclude Include="Sms.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="TecentShortMessage.h" />
     <ClInclude Include="zc-client.h" />
     <ClInclude Include="zc-clientDlg.h" />
+    <ClInclude Include="zip.h" />
+    <ClInclude Include="ZipFile.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Base64.cpp" />
@@ -214,8 +217,11 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="TecentShortMessage.cpp" />
     <ClCompile Include="zc-client.cpp" />
     <ClCompile Include="zc-clientDlg.cpp" />
+    <ClCompile Include="zip.cpp" />
+    <ClCompile Include="ZipFile.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="zc-client.rc" />

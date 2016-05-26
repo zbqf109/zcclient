@@ -20,6 +20,9 @@ public:
 	protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV support
 
+public:
+	
+
 private:
 	CListBox *m_lbLog;
 	int m_cdtype;
