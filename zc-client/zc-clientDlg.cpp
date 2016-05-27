@@ -275,7 +275,7 @@ void CzcclientDlg::OnBnClickedButtonStart()
 	pStartButton->SetWindowText(_T("½áÊø"));
 	pEditId->SetReadOnly(TRUE);
 
-	m_clientThread = AfxBeginThread(CzcclientDlg::MyClientRunFunc, &m_ctObj);
+	//m_clientThread = AfxBeginThread(CzcclientDlg::MyClientRunFunc, &m_ctObj);
 
 	m_stObj.m_sServer = m_sServer;
 	m_stObj.m_sName = name;
