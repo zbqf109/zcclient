@@ -28,6 +28,7 @@ private:
 	int m_cdtype;
 	CString m_cdpath;
 	CList<CString> m_lNumbers;
+	CList<CString> m_lComPorts;
 	CString m_sServer;
 	CMyClientThreadParam m_ctObj;
 	MyScanThreadParam m_stObj;
@@ -39,6 +40,7 @@ private:
 	void InitCardPoolNumbers();
 	PBYTE _ServerInitConnRequestData(int *bufflen);
 	void GetSmsFromCardDrive(const CString &phone);
+	int SearchSerialPorts();
 
 	static UINT MyClientRunFunc(LPVOID);
 	static UINT MyScanFunc(LPVOID);

@@ -57,6 +57,18 @@ BOOL CzcclientDlg::OnInitDialog()
 	SetIcon(m_hIcon, TRUE);			// Set big icon
 	SetIcon(m_hIcon, FALSE);		// Set small icon
 
+	// search serial ports
+	if (0 == SearchSerialPorts())
+	{
+		AppendLog(_T("Windows 版本太低，不能运行本软件，请联系开发者"));
+		GetDlgItem(IDC_EDIT1)->EnableWindow(FALSE);
+		GetDlgItem(IDC_EDIT3)->EnableWindow(FALSE);
+		GetDlgItem(IDC_BUTTON_START)->EnableWindow(FALSE);
+		return TRUE;
+	}
+
+	AppendLog(_T("获取串口成功。如果串口列表不正确，请联系开发者。"));
+
 	// Get card drive type and path
 	GetCardDrive(m_cdtype, m_cdpath);
 	if (m_cdtype == 0)
@@ -92,12 +104,13 @@ BOOL CzcclientDlg::OnInitDialog()
 	lst->SetColumnWidth(2, 100);
 
 	// Insert numbers
-	POSITION p = m_lNumbers.GetHeadPosition();
+	POSITION p1 = m_lNumbers.GetHeadPosition();
+	POSITION p2 = m_lComPorts.GetHeadPosition();
 	for (int i = 0; i < m_lNumbers.GetCount(); i++)
 	{
-		CString sNumber = m_lNumbers.GetNext(p);
-		CString sComserial;
-		sComserial.Format(_T("COM%d"), i + 2);
+		CString sNumber = m_lNumbers.GetNext(p1);
+		CString sComserial = m_lComPorts.GetNext(p2);
+		//sComserial.Format(_T("COM%d"), i + 2);
 		lst->InsertItem(i, sComserial);
 		lst->SetItemText(i, 1, sNumber);
 
@@ -158,10 +171,10 @@ void CzcclientDlg::OnBnClickedButtonStart()
 
 
 
-	if (m_clientThread != NULL)
+	if (m_cdscanThread != NULL)
 	{
 		//AfxEndThread(0);
-		AppendLog(_T("等待任务结束"));
+		AppendLog(_T("等待任务结束..."));
 		m_ctObj.m_mutex.Lock();
 		m_ctObj.m_bQuit = TRUE;
 		m_ctObj.m_mutex.Unlock();
@@ -642,6 +655,78 @@ void CzcclientDlg::GetSmsFromCardDrive(const CString &phone)
 
 }
 
+int CzcclientDlg::SearchSerialPorts()
+{
+	HKEY hKey;
+	LONG ret;
+	OSVERSIONINFOEX osvi;
+	BOOL bOsVersionInfoEx;
+	TCHAR keyinfo[100], comm_name[200], ValueName[200];
+	int i;
+	DWORD sType, Reserved, cbData, cbValueName;
+
+	//hIcon = AfxGetApp()->LoadIcon(IDI_HARDWARE);
+	//SetIcon(hIcon, false);
+
+	ZeroMemory(&osvi, sizeof(OSVERSIONINFOEX));
+	osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+	osvi.dwPlatformId = VER_PLATFORM_WIN32_NT;
+
+	DWORDLONG dwlConditionMask = 0;
+	//VER_SET_CONDITION(dwlConditionMask, VER_MAJORVERSION, VER_EQUAL);
+	//VER_SET_CONDITION(dwlConditionMask, VER_MINORVERSION, VER_EQUAL);
+	VER_SET_CONDITION(dwlConditionMask, VER_PLATFORMID, VER_EQUAL);
+
+	//bOsVersionInfoEx = GetVersionEx(&osvi);
+	bOsVersionInfoEx = VerifyVersionInfo(&osvi, VER_PLATFORMID, dwlConditionMask);
+
+	if (!bOsVersionInfoEx)
+	{
+		return 0;
+	}
+
+	//memset(keyinfo, 0, 100);
+	_tcscpy(keyinfo, _T("HARDWARE\\DEVICEMAP\\SERIALCOMM"));
+	i = 0; sType = REG_SZ;Reserved = 0;
+	
+	ret = RegOpenKeyEx(HKEY_LOCAL_MACHINE, keyinfo, 0, KEY_READ, &hKey);
+	if (ret == ERROR_SUCCESS) {
+#if 0
+		// 10-25
+		if (osvi.dwPlatformId == VER_PLATFORM_WIN32_WINDOWS)
+		{
+			for (i = 1;i <= 128;i++)
+			{
+				//sprintf(comm_name, "COM%d", i);
+				_stprintf(comm_name, _T("COM%d"), i);
+			}
+		}
+		else if (osvi.dwPlatformId == VER_PLATFORM_WIN32_NT)
+		{
+#endif
+			while (1)
+			{
+				cbData = 200;cbValueName = 200;
+				memset(comm_name, 0, sizeof (comm_name));
+				memset(ValueName, 0, sizeof (ValueName));
+				ret = RegEnumValue(hKey, i, ValueName, &cbValueName, NULL, &sType, (LPBYTE)comm_name, &cbData);
+				if (ret != ERROR_SUCCESS)
+				{
+					break;
+				}
+				if (_tcscmp(comm_name, _T("COM1"))!=0)
+					m_lComPorts.AddTail(comm_name);
+				i++;
+			} 
+#if 0
+		}
+#endif
+	}
+
+	RegCloseKey(hKey);
+	return 1;
+}
+
 LRESULT CzcclientDlg::OnServerNumber(WPARAM wParam, LPARAM lParam)
 {
 	CString *pStrNumber = (CString *)lParam;
@@ -738,6 +823,8 @@ LRESULT CzcclientDlg::OnTaskEnd(WPARAM wParam, LPARAM lParam)
 
 		pStartButton->SetWindowText(_T("开始"));
 		pEditId->SetReadOnly(FALSE);
+
+		AppendLog(_T("任务成功结束。"));
 	}
 	return 0;
 }
@@ -807,7 +894,7 @@ UINT CzcclientDlg::MyScanFunc(LPVOID param)
 		}
 
 		
-		CTime time = CTime(lpinf.ftLastAccessTime);
+		CTime time = CTime(lpinf.ftLastWriteTime);
 		if (tFileWriteTime >= time)
 		{
 			Sleep(3 * 1000); // sleep 3 seconds
